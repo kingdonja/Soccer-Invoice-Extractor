@@ -183,7 +183,7 @@
 
       // Totals row: find the labelled summary line, take the numbers on the next line.
       // Works no matter which page it lands on, and ignores "Page Subtotal" lines.
-      let net = null, freight = null, tax = null, totalDue = null;
+      let gross = null, disc = null, net = null, freight = null, tax = null, totalDue = null;
       for (let i = 0; i < allLines.length; i++) {
         const t = allLines[i].text;
         if (t.includes("Net Amount") && t.includes("Total Due USD")) {
@@ -194,6 +194,8 @@
           if (nums && nums.length >= 6) {
             const clean = (n) => parseFloat(n.replace(/,/g, "").replace(/-/g, ""));
             // order: Gross, Total Disc, Net, Freight, Tax, Total Due USD
+            // (Total Disc prints as "44.10-"; we record it as a positive number.)
+            gross = clean(nums[0]); disc = clean(nums[1]);
             net = clean(nums[2]); freight = clean(nums[3]); tax = clean(nums[4]); totalDue = clean(nums[5]);
           }
           break;
@@ -202,7 +204,7 @@
 
       const ok = invoiceNumber && poNumber && net != null && totalDue != null;
       return {
-        poNumber, invoiceNumber, net, freight, tax, totalDue,
+        poNumber, invoiceNumber, gross, disc, net, freight, tax, totalDue,
         error: ok ? "" : "Could not read all fields — please check this PDF."
       };
     }
@@ -235,18 +237,20 @@
     function renderResults() {
       if (!rows.length) { resultsEl.innerHTML = ""; return; }
       let html = "<table><thead><tr>" +
-        "<th>PO Number</th><th>Invoice Number</th><th>Net Amount</th>" +
-        "<th>Freight Amount</th><th>Tax Amount</th><th>Total Due USD</th></tr></thead><tbody>";
+        "<th>PO Number</th><th>Invoice Number</th><th>Gross Amount</th><th>Total Disc</th>" +
+        "<th>Net Amount</th><th>Freight Amount</th><th>Tax Amount</th><th>Total Due USD</th></tr></thead><tbody>";
       for (const r of rows) {
         html += "<tr class='" + (r.error ? "error" : "") + "'>" +
           "<td>" + (r.poNumber || "—") + "</td>" +
           "<td>" + (r.invoiceNumber || "—") + "</td>" +
+          "<td class='num'>" + money(r.gross) + "</td>" +
+          "<td class='num'>" + money(r.disc) + "</td>" +
           "<td class='num'>" + money(r.net) + "</td>" +
           "<td class='num'>" + money(r.freight) + "</td>" +
           "<td class='num'>" + money(r.tax) + "</td>" +
           "<td class='num'>" + money(r.totalDue) + "</td></tr>";
         if (r.error) {
-          html += "<tr class='error'><td colspan='6' style='font-size:12.5px'>⚠ " +
+          html += "<tr class='error'><td colspan='8' style='font-size:12.5px'>⚠ " +
                   r.file + ": " + r.error + "</td></tr>";
         }
       }
@@ -256,11 +260,11 @@
 
     // ---------- Excel export ----------
     exportBtn.addEventListener("click", () => {
-      const header = ["PO Number", "Invoice Number", "Net Amount", "Freight Amount", "Tax Amount", "Total Due USD"];
+      const header = ["PO Number", "Invoice Number", "Gross Amount", "Total Disc", "Net Amount", "Freight Amount", "Tax Amount", "Total Due USD"];
       const data = [header];
       for (const r of rows) {
         if (r.error) continue; // only export rows we read successfully
-        data.push([r.poNumber, r.invoiceNumber, r.net, r.freight, r.tax, r.totalDue]);
+        data.push([r.poNumber, r.invoiceNumber, r.gross, r.disc, r.net, r.freight, r.tax, r.totalDue]);
       }
       const ws = XLSX.utils.aoa_to_sheet(data);
       // Keep PO and Invoice as text so long numbers aren't altered.

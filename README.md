@@ -5,8 +5,11 @@ team reconciles, then exports them to Excel. No installation, no server, no Pyth
 
 ## What it extracts
 
-For each invoice: **PO Number, Invoice Number, Net Amount, Freight Amount,
-Tax Amount, Total Due USD.**
+For each invoice: **PO Number, Invoice Number, Gross Amount, Total Disc,
+Net Amount, Freight Amount, Tax Amount, Total Due USD.**
+
+(Total Disc is shown as a positive number — it's the discount that was
+subtracted: Gross − Total Disc = Net.)
 
 ## How to use it
 
