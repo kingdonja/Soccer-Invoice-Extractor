@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <!--
-  Nike Invoice Processing Hub
-  ---------------------------
-  A browser-only tool. Drop in one or many Nike PDF invoices, click Process,
+  Invoice Processing Hub
+  ----------------------
+  A browser-only tool. Drop in one or many invoice PDFs, click Process,
   and it pulls out the six fields your team reconciles, shows them in a table,
   and lets you download an Excel file.
 
@@ -18,7 +18,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Nike Invoice Processing Hub</title>
+<title>Invoice Processing Hub</title>
 <style>
   body { font-family: system-ui, Arial, sans-serif; max-width: 1050px; margin: 32px auto;
          padding: 0 20px; color: #1a1f2e; background: #f6f7fb; }
@@ -49,8 +49,8 @@
 </style>
 </head>
 <body>
-  <h1>Nike Invoice Processing Hub</h1>
-  <p class="subtitle">Drop in Nike invoice PDFs, extract the reconciliation fields, and export to Excel.</p>
+  <h1>Invoice Processing Hub</h1>
+  <p class="subtitle">Drop in invoice PDFs, extract the reconciliation fields, and export to Excel.</p>
 
   <div id="dropzone">
     <p><strong>Drag invoice PDFs here</strong> (one or many)</p>
@@ -266,7 +266,7 @@
       // Keep PO and Invoice as text so long numbers aren't altered.
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, "Invoices");
-      XLSX.writeFile(wb, "nike-invoices.xlsx");
+      XLSX.writeFile(wb, "invoices.xlsx");
     });
   </script>
 </body>
