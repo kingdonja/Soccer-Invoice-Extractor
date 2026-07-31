@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<!--
+  Soccer Invoice Extractor
+  ------------------------
+  A simple web app that runs entirely in your browser.
+
+  How to use it:
+    1. Double-click this file. It opens in your web browser.
+    2. Drag a PDF onto the box (or click the box to pick a file).
+    3. A report appears on the page.
+    4. Click "Download report" to save it.
+
+  There is NOTHING to install and no internet server involved. The one thing it
+  loads from the internet is "PDF.js", a free tool that reads PDF files.
+
+  You do not need to understand every line below. Plain-language notes are added
+  throughout so you can follow along and change things later.
+-->
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Soccer Invoice Extractor</title>
+
+  <!-- ============================================================
+       CSS: this section controls how the page LOOKS.
+       ============================================================ -->
+  <style>
+    /* The overall page */
+    body {
+      font-family: system-ui, Arial, sans-serif;
+      max-width: 820px;
+      margin: 40px auto;
+      padding: 0 20px;
+      color: #1a1a2e;
+      background: #f7f8fb;
+    }
+
+    h1 { margin-bottom: 4px; }
+    .subtitle { color: #666; margin-top: 0; }
+
+    /* The drag-and-drop box */
+    #dropzone {
+      border: 3px dashed #b7c0d8;
+      border-radius: 12px;
+      padding: 48px 20px;
+      text-align: center;
+      color: #55607a;
+      background: #ffffff;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    /* This style is added while you are dragging a file over the box */
+    #dropzone.dragover {
+      border-color: #4a6cf7;
+      background: #eef2ff;
+      color: #2b3a67;
+    }
+    #dropzone strong { color: #2b3a67; }
+
+    /* The area where the report is shown */
+    #output { margin-top: 28px; }
+
+    .report-box {
+      background: #ffffff;
+      border: 1px solid #e2e6f0;
+      border-radius: 12px;
+      padding: 20px 24px;
+      white-space: pre-wrap;      /* keeps line breaks in the report */
+      line-height: 1.5;
+      max-height: 460px;
+      overflow-y: auto;
+    }
+
+    button {
+      background: #4a6cf7;
+      color: #fff;
+      border: none;
+      padding: 10px 18px;
+      border-radius: 8px;
+      font-size: 15px;
+      cursor: pointer;
+      margin-top: 16px;
+    }
+    button:hover { background: #3a56d4; }
+    button:disabled { background: #b7c0d8; cursor: not-allowed; }
+
+    .status { margin-top: 16px; color: #55607a; }
+    .error { color: #c0392b; }
+  </style>
+</head>
+
+<body>
+  <h1>Soccer Invoice Extractor</h1>
+  <p class="subtitle">Drop in a PDF and get a clean, readable report.</p>
+
+  <!-- The drag-and-drop box the user interacts with -->
+  <div id="dropzone">
+    <p><strong>Drag a PDF here</strong></p>
+    <p>or click to choose a file</p>
+  </div>
+
+  <!-- A hidden file picker that opens when the box is clicked -->
+  <input type="file" id="fileInput" accept="application/pdf" style="display:none" />
+
+  <!-- Messages (e.g. "Reading...") show up here -->
+  <div id="status" class="status"></div>
+
+  <!-- The report and download button appear here -->
+  <div id="output"></div>
+
+  <!-- ============================================================
+       PDF.js: the free tool (from Mozilla) that reads PDF files.
+       This line loads it from a trusted public library site.
+       ============================================================ -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+
+  <!-- ============================================================
+       JavaScript: this section makes the page DO things.
+       ============================================================ -->
+  <script>
+    // Tell PDF.js where to find its helper file (needed for it to work).
+    pdfjsLib.GlobalWorkerOptions.workerSrc =
+      "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+
+    // Grab the parts of the page we need to work with.
+    const dropzone  = document.getElementById("dropzone");
+    const fileInput = document.getElementById("fileInput");
+    const statusEl  = document.getElementById("status");
+    const outputEl  = document.getElementById("output");
+
+    // We remember the latest report text so the Download button can save it.
+    let latestReport = "";
+    let latestName = "report";
+
+    // --- Clicking the box opens the file picker ---
+    dropzone.addEventListener("click", () => fileInput.click());
+
+    // --- When a file is chosen with the picker ---
+    fileInput.addEventListener("change", (event) => {
+      const file = event.target.files[0];
+      if (file) handleFile(file);
+    });
+
+    // --- Drag-and-drop handling ---
+    // Highlight the box when a file is dragged over it.
+    dropzone.addEventListener("dragover", (event) => {
+      event.preventDefault();                 // required so a drop is allowed
+      dropzone.classList.add("dragover");
+    });
+    dropzone.addEventListener("dragleave", () => {
+      dropzone.classList.remove("dragover");
+    });
+    // When the file is dropped, read it.
+    dropzone.addEventListener("drop", (event) => {
+      event.preventDefault();
+      dropzone.classList.remove("dragover");
+      const file = event.dataTransfer.files[0];
+      if (file) handleFile(file);
+    });
+
+    // --- The main routine: take a file and build a report ---
+    async function handleFile(file) {
+      // Make sure it's actually a PDF.
+      if (file.type !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf")) {
+        showStatus("That doesn't look like a PDF file. Please choose a .pdf.", true);
+        return;
+      }
+
+      showStatus("Reading \"" + file.name + "\"...", false);
+      outputEl.innerHTML = "";
+
+      try {
+        // Turn the file into raw data PDF.js can read.
+        const data = await file.arrayBuffer();
+        const pdf = await pdfjsLib.getDocument({ data }).promise;
+
+        const pageCount = pdf.numPages;
+        const pageTexts = [];
+
+        // Read the text from each page, one at a time.
+        for (let i = 1; i <= pageCount; i++) {
+          const page = await pdf.getPage(i);
+          const content = await page.getTextContent();
+          const text = content.items.map((item) => item.str).join(" ");
+          pageTexts.push(text);
+        }
+
+        // Count the total words across all pages.
+        const totalWords = pageTexts.reduce(
+          (sum, t) => sum + t.split(/\s+/).filter(Boolean).length, 0
+        );
+
+        // Build the report text.
+        let report = "Report for " + file.name + "\n";
+        report += "=".repeat(("Report for " + file.name).length) + "\n\n";
+        report += "Pages: " + pageCount + "\n";
+        report += "Total words: " + totalWords + "\n\n";
+
+        for (let i = 0; i < pageTexts.length; i++) {
+          report += "----- Page " + (i + 1) + " -----\n";
+          report += (pageTexts[i].trim() || "(No readable text — this page may be a scanned image.)");
+          report += "\n\n";
+        }
+
+        // Remember it for downloading, and show it on the page.
+        latestReport = report;
+        latestName = file.name.replace(/\.pdf$/i, "") + "_report.txt";
+
+        showReport(report);
+        showStatus("Done! Report ready below.", false);
+      } catch (err) {
+        console.error(err);
+        showStatus("Sorry, I couldn't read that PDF. (" + err.message + ")", true);
+      }
+    }
+
+    // --- Show a status message (set isError to true for red text) ---
+    function showStatus(message, isError) {
+      statusEl.textContent = message;
+      statusEl.className = isError ? "status error" : "status";
+    }
+
+    // --- Display the report and a Download button ---
+    function showReport(report) {
+      outputEl.innerHTML = "";
+
+      const box = document.createElement("div");
+      box.className = "report-box";
+      box.textContent = report;
+      outputEl.appendChild(box);
+
+      const btn = document.createElement("button");
+      btn.textContent = "Download report";
+      btn.addEventListener("click", downloadReport);
+      outputEl.appendChild(btn);
+    }
+
+    // --- Save the report as a text file to the user's Downloads ---
+    function downloadReport() {
+      // Wrap the text in a downloadable "blob", then click a hidden link.
+      const blob = new Blob([latestReport], { type: "text/plain" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = latestName;
+      link.click();
+      URL.revokeObjectURL(url);
+    }
+  </script>
+</body>
+</html>

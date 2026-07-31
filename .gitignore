@@ -1,0 +1,12 @@
+# This file tells Git which files to IGNORE (not save to GitHub).
+
+# Operating system junk files
+.DS_Store
+Thumbs.db
+
+# Editor settings
+.vscode/
+.idea/
+
+# If you ever install packages here, don't upload them
+node_modules/
