@@ -1,34 +1,46 @@
-# Soccer Invoice Extractor
+# Nike Invoice Processing Hub
 
-A simple web app that reads a PDF (such as an invoice) and produces a clean,
-readable report — all inside your web browser. Nothing to install.
+A browser-only tool that reads Nike invoice PDFs and pulls out the fields your
+team reconciles, then exports them to Excel. No installation, no server, no Python.
+
+## What it extracts
+
+For each invoice: **PO Number, Invoice Number, Net Amount, Freight Amount,
+Tax Amount, Total Due USD.**
 
 ## How to use it
 
-1. Double-click **`index.html`**. It opens in your web browser.
-2. Drag a PDF onto the box (or click the box to choose a file).
-3. A report appears on the page: the file name, number of pages, total word
-   count, and the text from each page.
-4. Click **Download report** to save it as a text file.
-
-## What it's built with
-
-- **HTML** — the structure of the page
-- **CSS** — how the page looks
-- **JavaScript** — the part that reads the PDF and builds the report
-
-All three live in the single `index.html` file. To read PDFs it uses
-**PDF.js**, a free tool made by Mozilla, loaded automatically from the internet.
+1. Double-click **`index.html`** to open it in your web browser.
+2. Drag one or many Nike invoice PDFs onto the box (or click to choose files).
+3. Click **Process Invoices**. The results appear in a table.
+4. Click **Download Excel** to save an `.xlsx` file for reconciliation.
 
 ## Good to know
 
-- You need to be online the first time you use it (so it can load PDF.js).
-- Everything happens on your own computer — your PDF is never uploaded anywhere.
-- Scanned PDFs that are really just images (no real text inside) won't have text
-  to extract; the report will say so for those pages.
+- You need to be online the first time, so it can load two free tools it relies on:
+  **PDF.js** (reads the PDFs) and **SheetJS** (builds the Excel file).
+- Everything runs on your own computer — no invoice is ever uploaded anywhere.
+- It has been tested against real Nike invoices, including long multi-page ones.
+
+## How it handles the tricky parts
+
+- The totals (Net/Freight/Tax/Total Due) aren't always on page 1 — on long
+  invoices they're on a later page. The tool scans every page to find them and
+  ignores the per-page "Page Subtotal" lines.
+- The PO Number sits in a column that the PDF splits awkwardly. The tool rebuilds
+  it from the page layout instead of the raw text, so it doesn't grab a neighboring
+  number by mistake.
+- Dollar amounts with commas (e.g. 1,363.50) are read correctly.
+- Rows it can't fully read are shown in red rather than exported, so nothing wrong
+  slips into your spreadsheet.
+
+## Scope of this first version (v1)
+
+Bulk upload, extraction of the six fields, on-screen table, and Excel export.
 
 ## Ideas for later
 
-- Pull out specific invoice fields (total, date, player/team name, invoice number).
-- Handle several PDFs at once.
-- Save the report as a nicely formatted PDF or spreadsheet instead of plain text.
+- CSV export.
+- Duplicate invoice detection (same invoice dropped in twice).
+- Grouping and subtotals by PO Number, plus a grand total.
+- Support for additional vendors beyond Nike.

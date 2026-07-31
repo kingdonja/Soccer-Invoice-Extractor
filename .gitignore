@@ -4,6 +4,9 @@
 .DS_Store
 Thumbs.db
 
+# Microsoft Office temporary "lock" files (created while a doc is open)
+~$*
+
 # Editor settings
 .vscode/
 .idea/

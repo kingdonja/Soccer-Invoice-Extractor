@@ -1,252 +1,271 @@
 <!DOCTYPE html>
 <!--
-  Soccer Invoice Extractor
-  ------------------------
-  A simple web app that runs entirely in your browser.
+  Nike Invoice Processing Hub
+  ---------------------------
+  A browser-only tool. Drop in one or many Nike PDF invoices, click Process,
+  and it pulls out the six fields your team reconciles, shows them in a table,
+  and lets you download an Excel file.
 
-  How to use it:
-    1. Double-click this file. It opens in your web browser.
-    2. Drag a PDF onto the box (or click the box to pick a file).
-    3. A report appears on the page.
-    4. Click "Download report" to save it.
+  How it works (plain language):
+    - PDF.js (a free tool from Mozilla) reads the text inside each PDF.
+    - We locate the six values by their labels and column positions.
+    - SheetJS (another free tool) builds the Excel file, all in your browser.
 
-  There is NOTHING to install and no internet server involved. The one thing it
-  loads from the internet is "PDF.js", a free tool that reads PDF files.
-
-  You do not need to understand every line below. Plain-language notes are added
-  throughout so you can follow along and change things later.
+  Nothing is uploaded anywhere. Everything happens on your own computer.
+  You need to be online the first time so it can load those two free tools.
 -->
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Soccer Invoice Extractor</title>
-
-  <!-- ============================================================
-       CSS: this section controls how the page LOOKS.
-       ============================================================ -->
-  <style>
-    /* The overall page */
-    body {
-      font-family: system-ui, Arial, sans-serif;
-      max-width: 820px;
-      margin: 40px auto;
-      padding: 0 20px;
-      color: #1a1a2e;
-      background: #f7f8fb;
-    }
-
-    h1 { margin-bottom: 4px; }
-    .subtitle { color: #666; margin-top: 0; }
-
-    /* The drag-and-drop box */
-    #dropzone {
-      border: 3px dashed #b7c0d8;
-      border-radius: 12px;
-      padding: 48px 20px;
-      text-align: center;
-      color: #55607a;
-      background: #ffffff;
-      cursor: pointer;
-      transition: all 0.15s ease;
-    }
-    /* This style is added while you are dragging a file over the box */
-    #dropzone.dragover {
-      border-color: #4a6cf7;
-      background: #eef2ff;
-      color: #2b3a67;
-    }
-    #dropzone strong { color: #2b3a67; }
-
-    /* The area where the report is shown */
-    #output { margin-top: 28px; }
-
-    .report-box {
-      background: #ffffff;
-      border: 1px solid #e2e6f0;
-      border-radius: 12px;
-      padding: 20px 24px;
-      white-space: pre-wrap;      /* keeps line breaks in the report */
-      line-height: 1.5;
-      max-height: 460px;
-      overflow-y: auto;
-    }
-
-    button {
-      background: #4a6cf7;
-      color: #fff;
-      border: none;
-      padding: 10px 18px;
-      border-radius: 8px;
-      font-size: 15px;
-      cursor: pointer;
-      margin-top: 16px;
-    }
-    button:hover { background: #3a56d4; }
-    button:disabled { background: #b7c0d8; cursor: not-allowed; }
-
-    .status { margin-top: 16px; color: #55607a; }
-    .error { color: #c0392b; }
-  </style>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Nike Invoice Processing Hub</title>
+<style>
+  body { font-family: system-ui, Arial, sans-serif; max-width: 1050px; margin: 32px auto;
+         padding: 0 20px; color: #1a1f2e; background: #f6f7fb; }
+  h1 { margin-bottom: 2px; }
+  .subtitle { color: #667; margin-top: 0; }
+  #dropzone { border: 3px dashed #b7c0d8; border-radius: 12px; padding: 40px 20px;
+              text-align: center; color: #55607a; background: #fff; cursor: pointer;
+              transition: all .15s ease; }
+  #dropzone.dragover { border-color: #4a6cf7; background: #eef2ff; color: #2b3a67; }
+  #dropzone strong { color: #2b3a67; }
+  .row { display: flex; gap: 12px; align-items: center; margin-top: 16px; flex-wrap: wrap; }
+  button { background: #4a6cf7; color: #fff; border: none; padding: 11px 18px; border-radius: 8px;
+           font-size: 15px; cursor: pointer; }
+  button:hover { background: #3a56d4; }
+  button:disabled { background: #b7c0d8; cursor: not-allowed; }
+  button.secondary { background: #10893e; }
+  button.secondary:hover { background: #0c6f32; }
+  #fileList { margin-top: 14px; font-size: 14px; color: #55607a; }
+  #fileList div { padding: 2px 0; }
+  table { border-collapse: collapse; width: 100%; margin-top: 20px; background: #fff;
+          border-radius: 10px; overflow: hidden; font-size: 14px; }
+  th, td { border-bottom: 1px solid #e6e9f2; padding: 9px 12px; text-align: left; }
+  th { background: #eef2ff; color: #22314f; }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  tr.error td { background: #fff3f3; color: #b3261e; }
+  .status { margin-top: 14px; color: #55607a; min-height: 20px; }
+  .hint { font-size: 12.5px; color: #8792a8; margin-top: 6px; }
+</style>
 </head>
-
 <body>
-  <h1>Soccer Invoice Extractor</h1>
-  <p class="subtitle">Drop in a PDF and get a clean, readable report.</p>
+  <h1>Nike Invoice Processing Hub</h1>
+  <p class="subtitle">Drop in Nike invoice PDFs, extract the reconciliation fields, and export to Excel.</p>
 
-  <!-- The drag-and-drop box the user interacts with -->
   <div id="dropzone">
-    <p><strong>Drag a PDF here</strong></p>
-    <p>or click to choose a file</p>
+    <p><strong>Drag invoice PDFs here</strong> (one or many)</p>
+    <p>or click to choose files</p>
+  </div>
+  <input type="file" id="fileInput" accept="application/pdf" multiple style="display:none" />
+
+  <div id="fileList"></div>
+
+  <div class="row">
+    <button id="processBtn" disabled>Process Invoices</button>
+    <button id="exportBtn" class="secondary" disabled>Download Excel</button>
+    <button id="clearBtn" style="background:#7a8699;">Clear</button>
   </div>
 
-  <!-- A hidden file picker that opens when the box is clicked -->
-  <input type="file" id="fileInput" accept="application/pdf" style="display:none" />
-
-  <!-- Messages (e.g. "Reading...") show up here -->
   <div id="status" class="status"></div>
 
-  <!-- The report and download button appear here -->
-  <div id="output"></div>
+  <div id="results"></div>
 
-  <!-- ============================================================
-       PDF.js: the free tool (from Mozilla) that reads PDF files.
-       This line loads it from a trusted public library site.
-       ============================================================ -->
+  <!-- Free tools loaded from trusted public libraries -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
-  <!-- ============================================================
-       JavaScript: this section makes the page DO things.
-       ============================================================ -->
   <script>
-    // Tell PDF.js where to find its helper file (needed for it to work).
     pdfjsLib.GlobalWorkerOptions.workerSrc =
       "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
 
-    // Grab the parts of the page we need to work with.
-    const dropzone  = document.getElementById("dropzone");
+    const dropzone = document.getElementById("dropzone");
     const fileInput = document.getElementById("fileInput");
-    const statusEl  = document.getElementById("status");
-    const outputEl  = document.getElementById("output");
+    const fileListEl = document.getElementById("fileList");
+    const processBtn = document.getElementById("processBtn");
+    const exportBtn = document.getElementById("exportBtn");
+    const clearBtn = document.getElementById("clearBtn");
+    const statusEl = document.getElementById("status");
+    const resultsEl = document.getElementById("results");
 
-    // We remember the latest report text so the Download button can save it.
-    let latestReport = "";
-    let latestName = "report";
+    let files = [];       // the PDFs the user dropped in
+    let rows = [];        // the extracted results
 
-    // --- Clicking the box opens the file picker ---
+    // ---------- File selection ----------
     dropzone.addEventListener("click", () => fileInput.click());
-
-    // --- When a file is chosen with the picker ---
-    fileInput.addEventListener("change", (event) => {
-      const file = event.target.files[0];
-      if (file) handleFile(file);
+    fileInput.addEventListener("change", (e) => addFiles(e.target.files));
+    dropzone.addEventListener("dragover", (e) => { e.preventDefault(); dropzone.classList.add("dragover"); });
+    dropzone.addEventListener("dragleave", () => dropzone.classList.remove("dragover"));
+    dropzone.addEventListener("drop", (e) => {
+      e.preventDefault(); dropzone.classList.remove("dragover");
+      addFiles(e.dataTransfer.files);
     });
 
-    // --- Drag-and-drop handling ---
-    // Highlight the box when a file is dragged over it.
-    dropzone.addEventListener("dragover", (event) => {
-      event.preventDefault();                 // required so a drop is allowed
-      dropzone.classList.add("dragover");
-    });
-    dropzone.addEventListener("dragleave", () => {
-      dropzone.classList.remove("dragover");
-    });
-    // When the file is dropped, read it.
-    dropzone.addEventListener("drop", (event) => {
-      event.preventDefault();
-      dropzone.classList.remove("dragover");
-      const file = event.dataTransfer.files[0];
-      if (file) handleFile(file);
+    function addFiles(fileObjs) {
+      for (const f of fileObjs) {
+        if (f.type === "application/pdf" || f.name.toLowerCase().endsWith(".pdf")) files.push(f);
+      }
+      renderFileList();
+    }
+
+    function renderFileList() {
+      if (!files.length) { fileListEl.innerHTML = ""; processBtn.disabled = true; return; }
+      fileListEl.innerHTML = "<strong>" + files.length + " file(s) ready:</strong>" +
+        files.map(f => "<div>• " + f.name + "</div>").join("");
+      processBtn.disabled = false;
+    }
+
+    clearBtn.addEventListener("click", () => {
+      files = []; rows = []; fileInput.value = "";
+      renderFileList(); resultsEl.innerHTML = ""; statusEl.textContent = "";
+      exportBtn.disabled = true;
     });
 
-    // --- The main routine: take a file and build a report ---
-    async function handleFile(file) {
-      // Make sure it's actually a PDF.
-      if (file.type !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf")) {
-        showStatus("That doesn't look like a PDF file. Please choose a .pdf.", true);
-        return;
+    // ---------- Group text items into visual lines (top-to-bottom) ----------
+    // This is more reliable than reading the raw text stream, because some
+    // values (like the PO Number) wrap onto the next line inside their column.
+    function groupLines(items) {
+      const its = items.map(it => ({ x: it.transform[4], y: it.transform[5], s: it.str }))
+                       .filter(it => it.s !== undefined);
+      its.sort((a, b) => (b.y - a.y) || (a.x - b.x));
+      const lines = [];
+      let cur = null;
+      for (const it of its) {
+        if (!cur || Math.abs(it.y - cur.y) > 3) { cur = { y: it.y, items: [it] }; lines.push(cur); }
+        else cur.items.push(it);
+      }
+      return lines.map(l => ({
+        y: l.y,
+        text: l.items.sort((a, b) => a.x - b.x).map(i => i.s).join(" ").replace(/\s+/g, " ").trim()
+      }));
+    }
+
+    // ---------- Extract the six fields from one PDF ----------
+    async function extractInvoice(arrayBuffer) {
+      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+
+      // Gather visual lines from every page.
+      let allLines = [];
+      const perPageLines = [];
+      for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const tc = await page.getTextContent();
+        const lines = groupLines(tc.items);
+        perPageLines.push(lines);
+        allLines = allLines.concat(lines);
+      }
+      const fullText = allLines.map(l => l.text).join("\n");
+
+      // Invoice Number
+      const invMatch = fullText.match(/Invoice Number:\s*([0-9]+)/);
+      const invoiceNumber = invMatch ? invMatch[1] : "";
+
+      // PO Number (Nike's "Cust Prod PO #" column, e.g. "SOXRFL 06182026").
+      // The value wraps: the header row shows "<Order#> <OrderDate> <POprefix> <ShipDoc>"
+      // and the PO's second half sits on the line directly below.
+      let poNumber = "";
+      outer:
+      for (const lines of perPageLines) {
+        for (let i = 0; i < lines.length; i++) {
+          const m = lines[i].text.match(/^(\d{9,})\s+(\d{2}\/\d{2}\/\d{4})\s+(.+)$/);
+          if (m) {
+            const rest = m[3].trim().split(/\s+/); // [POprefix, ShipDoc]
+            const prefix = rest[0] || "";
+            let suffix = "";
+            if (i + 1 < lines.length) {
+              const nm = lines[i + 1].text.match(/^(\d{6,10})$/);
+              if (nm) suffix = nm[1];
+            }
+            poNumber = (suffix ? prefix + " " + suffix : prefix).trim();
+            break outer;
+          }
+        }
       }
 
-      showStatus("Reading \"" + file.name + "\"...", false);
-      outputEl.innerHTML = "";
-
-      try {
-        // Turn the file into raw data PDF.js can read.
-        const data = await file.arrayBuffer();
-        const pdf = await pdfjsLib.getDocument({ data }).promise;
-
-        const pageCount = pdf.numPages;
-        const pageTexts = [];
-
-        // Read the text from each page, one at a time.
-        for (let i = 1; i <= pageCount; i++) {
-          const page = await pdf.getPage(i);
-          const content = await page.getTextContent();
-          const text = content.items.map((item) => item.str).join(" ");
-          pageTexts.push(text);
+      // Totals row: find the labelled summary line, take the numbers on the next line.
+      // Works no matter which page it lands on, and ignores "Page Subtotal" lines.
+      let net = null, freight = null, tax = null, totalDue = null;
+      for (let i = 0; i < allLines.length; i++) {
+        const t = allLines[i].text;
+        if (t.includes("Net Amount") && t.includes("Total Due USD")) {
+          const valLine = (allLines[i + 1] || {}).text || "";
+          const nums = valLine.match(/-?[\d,]+\.\d{2}-?/g);
+          if (nums && nums.length >= 6) {
+            const clean = (n) => parseFloat(n.replace(/,/g, "").replace(/-/g, ""));
+            // order: Gross, Total Disc, Net, Freight, Tax, Total Due USD
+            net = clean(nums[2]); freight = clean(nums[3]); tax = clean(nums[4]); totalDue = clean(nums[5]);
+          }
+          break;
         }
-
-        // Count the total words across all pages.
-        const totalWords = pageTexts.reduce(
-          (sum, t) => sum + t.split(/\s+/).filter(Boolean).length, 0
-        );
-
-        // Build the report text.
-        let report = "Report for " + file.name + "\n";
-        report += "=".repeat(("Report for " + file.name).length) + "\n\n";
-        report += "Pages: " + pageCount + "\n";
-        report += "Total words: " + totalWords + "\n\n";
-
-        for (let i = 0; i < pageTexts.length; i++) {
-          report += "----- Page " + (i + 1) + " -----\n";
-          report += (pageTexts[i].trim() || "(No readable text — this page may be a scanned image.)");
-          report += "\n\n";
-        }
-
-        // Remember it for downloading, and show it on the page.
-        latestReport = report;
-        latestName = file.name.replace(/\.pdf$/i, "") + "_report.txt";
-
-        showReport(report);
-        showStatus("Done! Report ready below.", false);
-      } catch (err) {
-        console.error(err);
-        showStatus("Sorry, I couldn't read that PDF. (" + err.message + ")", true);
       }
+
+      const ok = invoiceNumber && poNumber && net != null && totalDue != null;
+      return {
+        poNumber, invoiceNumber, net, freight, tax, totalDue,
+        error: ok ? "" : "Could not read all fields — please check this PDF."
+      };
     }
 
-    // --- Show a status message (set isError to true for red text) ---
-    function showStatus(message, isError) {
-      statusEl.textContent = message;
-      statusEl.className = isError ? "status error" : "status";
+    // ---------- Process button ----------
+    processBtn.addEventListener("click", async () => {
+      processBtn.disabled = true; exportBtn.disabled = true;
+      rows = [];
+      for (let i = 0; i < files.length; i++) {
+        statusEl.textContent = "Processing " + (i + 1) + " of " + files.length + ": " + files[i].name;
+        try {
+          const buf = await files[i].arrayBuffer();
+          const data = await extractInvoice(buf);
+          rows.push({ file: files[i].name, ...data });
+        } catch (err) {
+          rows.push({ file: files[i].name, poNumber: "", invoiceNumber: "", net: null,
+                      freight: null, tax: null, totalDue: null, error: "Couldn't open this PDF." });
+        }
+      }
+      renderResults();
+      const good = rows.filter(r => !r.error).length;
+      statusEl.textContent = "Done. Extracted " + good + " of " + rows.length + " invoice(s).";
+      processBtn.disabled = false;
+      exportBtn.disabled = good === 0;
+    });
+
+    // ---------- Show the results table ----------
+    function money(v) { return v == null ? "" : "$" + v.toFixed(2); }
+
+    function renderResults() {
+      if (!rows.length) { resultsEl.innerHTML = ""; return; }
+      let html = "<table><thead><tr>" +
+        "<th>PO Number</th><th>Invoice Number</th><th>Net Amount</th>" +
+        "<th>Freight Amount</th><th>Tax Amount</th><th>Total Due USD</th></tr></thead><tbody>";
+      for (const r of rows) {
+        html += "<tr class='" + (r.error ? "error" : "") + "'>" +
+          "<td>" + (r.poNumber || "—") + "</td>" +
+          "<td>" + (r.invoiceNumber || "—") + "</td>" +
+          "<td class='num'>" + money(r.net) + "</td>" +
+          "<td class='num'>" + money(r.freight) + "</td>" +
+          "<td class='num'>" + money(r.tax) + "</td>" +
+          "<td class='num'>" + money(r.totalDue) + "</td></tr>";
+        if (r.error) {
+          html += "<tr class='error'><td colspan='6' style='font-size:12.5px'>⚠ " +
+                  r.file + ": " + r.error + "</td></tr>";
+        }
+      }
+      html += "</tbody></table>";
+      resultsEl.innerHTML = html;
     }
 
-    // --- Display the report and a Download button ---
-    function showReport(report) {
-      outputEl.innerHTML = "";
-
-      const box = document.createElement("div");
-      box.className = "report-box";
-      box.textContent = report;
-      outputEl.appendChild(box);
-
-      const btn = document.createElement("button");
-      btn.textContent = "Download report";
-      btn.addEventListener("click", downloadReport);
-      outputEl.appendChild(btn);
-    }
-
-    // --- Save the report as a text file to the user's Downloads ---
-    function downloadReport() {
-      // Wrap the text in a downloadable "blob", then click a hidden link.
-      const blob = new Blob([latestReport], { type: "text/plain" });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = latestName;
-      link.click();
-      URL.revokeObjectURL(url);
-    }
+    // ---------- Excel export ----------
+    exportBtn.addEventListener("click", () => {
+      const header = ["PO Number", "Invoice Number", "Net Amount", "Freight Amount", "Tax Amount", "Total Due USD"];
+      const data = [header];
+      for (const r of rows) {
+        if (r.error) continue; // only export rows we read successfully
+        data.push([r.poNumber, r.invoiceNumber, r.net, r.freight, r.tax, r.totalDue]);
+      }
+      const ws = XLSX.utils.aoa_to_sheet(data);
+      // Keep PO and Invoice as text so long numbers aren't altered.
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Invoices");
+      XLSX.writeFile(wb, "nike-invoices.xlsx");
+    });
   </script>
 </body>
 </html>
