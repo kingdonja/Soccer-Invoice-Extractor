@@ -44,6 +44,8 @@
   th { background: #eef2ff; color: #22314f; }
   td.num { text-align: right; font-variant-numeric: tabular-nums; }
   tr.error td { background: #fff3f3; color: #b3261e; }
+  tr.dup td { background: #fff8e6; color: #8a6d1a; }
+  tfoot td { background: #eef2ff; font-weight: 700; border-top: 2px solid #c9d3ef; }
   .status { margin-top: 14px; color: #55607a; min-height: 20px; }
   .hint { font-size: 12.5px; color: #8792a8; margin-top: 6px; }
 </style>
@@ -224,15 +226,31 @@
                       freight: null, tax: null, totalDue: null, error: "Couldn't open this PDF." });
         }
       }
+      // Duplicate detection: the first copy of an invoice number counts;
+      // any repeat is flagged and excluded from totals and the Excel export.
+      const seen = new Set();
+      for (const r of rows) {
+        r.duplicate = false;
+        if (!r.error && r.invoiceNumber) {
+          if (seen.has(r.invoiceNumber)) r.duplicate = true;
+          else seen.add(r.invoiceNumber);
+        }
+      }
+
       renderResults();
-      const good = rows.filter(r => !r.error).length;
-      statusEl.textContent = "Done. Extracted " + good + " of " + rows.length + " invoice(s).";
+      const good = rows.filter(r => !r.error && !r.duplicate).length;
+      const dups = rows.filter(r => r.duplicate).length;
+      statusEl.textContent = "Done. Extracted " + good + " of " + rows.length + " invoice(s)." +
+        (dups ? " " + dups + " duplicate(s) skipped." : "");
       processBtn.disabled = false;
       exportBtn.disabled = good === 0;
     });
 
     // ---------- Show the results table ----------
-    function money(v) { return v == null ? "" : "$" + v.toFixed(2); }
+    function money(v) {
+      return v == null ? "" :
+        "$" + v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
 
     function renderResults() {
       if (!rows.length) { resultsEl.innerHTML = ""; return; }
@@ -240,7 +258,8 @@
         "<th>PO Number</th><th>Invoice Number</th><th>Gross Amount</th><th>Total Disc</th>" +
         "<th>Net Amount</th><th>Freight Amount</th><th>Tax Amount</th><th>Total Due USD</th></tr></thead><tbody>";
       for (const r of rows) {
-        html += "<tr class='" + (r.error ? "error" : "") + "'>" +
+        const cls = r.error ? "error" : (r.duplicate ? "dup" : "");
+        html += "<tr class='" + cls + "'>" +
           "<td>" + (r.poNumber || "—") + "</td>" +
           "<td>" + (r.invoiceNumber || "—") + "</td>" +
           "<td class='num'>" + money(r.gross) + "</td>" +
@@ -253,8 +272,28 @@
           html += "<tr class='error'><td colspan='8' style='font-size:12.5px'>⚠ " +
                   r.file + ": " + r.error + "</td></tr>";
         }
+        if (r.duplicate) {
+          html += "<tr class='dup'><td colspan='8' style='font-size:12.5px'>⚠ " +
+                  r.file + ": duplicate of invoice " + r.invoiceNumber +
+                  " — not counted in totals or the Excel export.</td></tr>";
+        }
       }
-      html += "</tbody></table>";
+      html += "</tbody>";
+
+      // Totals row: sums every successfully-read, non-duplicate invoice.
+      const counted = rows.filter(r => !r.error && !r.duplicate);
+      if (counted.length) {
+        const sum = (key) => counted.reduce((s, r) => s + (r[key] || 0), 0);
+        html += "<tfoot><tr>" +
+          "<td colspan='2'>Totals (" + counted.length + " invoice" + (counted.length > 1 ? "s" : "") + ")</td>" +
+          "<td class='num'>" + money(sum("gross")) + "</td>" +
+          "<td class='num'>" + money(sum("disc")) + "</td>" +
+          "<td class='num'>" + money(sum("net")) + "</td>" +
+          "<td class='num'>" + money(sum("freight")) + "</td>" +
+          "<td class='num'>" + money(sum("tax")) + "</td>" +
+          "<td class='num'>" + money(sum("totalDue")) + "</td></tr></tfoot>";
+      }
+      html += "</table>";
       resultsEl.innerHTML = html;
     }
 
@@ -262,10 +301,13 @@
     exportBtn.addEventListener("click", () => {
       const header = ["PO Number", "Invoice Number", "Gross Amount", "Total Disc", "Net Amount", "Freight Amount", "Tax Amount", "Total Due USD"];
       const data = [header];
-      for (const r of rows) {
-        if (r.error) continue; // only export rows we read successfully
+      const counted = rows.filter(r => !r.error && !r.duplicate); // skip failures and duplicates
+      for (const r of counted) {
         data.push([r.poNumber, r.invoiceNumber, r.gross, r.disc, r.net, r.freight, r.tax, r.totalDue]);
       }
+      // TOTALS row at the bottom, rounded to cents.
+      const sum = (key) => Math.round(counted.reduce((s, r) => s + (r[key] || 0), 0) * 100) / 100;
+      data.push(["TOTALS", "", sum("gross"), sum("disc"), sum("net"), sum("freight"), sum("tax"), sum("totalDue")]);
       const ws = XLSX.utils.aoa_to_sheet(data);
       // Keep PO and Invoice as text so long numbers aren't altered.
       const wb = XLSX.utils.book_new();

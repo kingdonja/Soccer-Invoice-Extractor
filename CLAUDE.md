@@ -55,6 +55,13 @@ Known format quirks (learned from real invoices — don't "simplify" these away)
 - Freight can legitimately be $0.00.
 - The totals row can appear on page 1, 2, or 3 depending on invoice length.
 
+## Duplicate detection & totals (implemented)
+
+- Duplicates are detected by invoice number (not file name). First copy counts;
+  repeats are flagged amber and excluded from totals and the Excel export.
+- The table has a tfoot Totals row; the Excel export ends with a TOTALS row.
+  Both sum only non-error, non-duplicate rows. Keep those two exclusions in sync.
+
 ## Ideas for later
 
-- CSV export; duplicate detection; grouping/subtotals by PO Number; more vendors.
+- CSV export; grouping/subtotals by PO Number; more vendors.

@@ -40,13 +40,20 @@ subtracted: Gross − Total Disc = Net.)
 - Rows it can't fully read are shown in red rather than exported, so nothing wrong
   slips into your spreadsheet.
 
-## Scope of this first version (v1)
+## Duplicate detection
 
-Bulk upload, extraction of the six fields, on-screen table, and Excel export.
+If the same invoice number is dropped in more than once (even under a different
+file name), the first copy counts and every repeat is highlighted in amber,
+labeled as a duplicate, and left out of the totals and the Excel export — so
+nothing gets double-counted.
+
+## Totals
+
+A bold Totals row at the bottom of the table (and a TOTALS row in the Excel
+export) sums every column across the successfully-read, non-duplicate invoices.
 
 ## Ideas for later
 
 - CSV export.
-- Duplicate invoice detection (same invoice dropped in twice).
-- Grouping and subtotals by PO Number, plus a grand total.
+- Grouping and subtotals by PO Number.
 - Support for additional vendors.
